@@ -70,6 +70,7 @@ class ImagesController < ApplicationController
       format.html
       format.json { render json: @image.map(&:fup_json) }
     end
+    @image.order(:position)
   end
 
   def update
@@ -96,6 +97,12 @@ class ImagesController < ApplicationController
     @warpable.cm_per_pixel = @warpable.get_cm_per_pixel
     @warpable.save
     render text: 'success'
+  end
+
+  def sort
+    params[:warpable].each_with_index do |id, index|
+      @warpable.where(id: id).update_all(position: index+1)
+    end
   end
 
   def destroy

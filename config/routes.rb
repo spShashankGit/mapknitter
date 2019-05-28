@@ -127,6 +127,14 @@ Mapknitter::Application.routes.draw do
 
   # You can have the root of your site routed with 'root'
   # just remember to delete public/index.html.
+
+  resources :images do
+    collection do
+      put :sort
+    end
+  end
+
+
   root :to => 'maps#index'
 
   # RESTful API
