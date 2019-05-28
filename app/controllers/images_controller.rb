@@ -99,7 +99,7 @@ class ImagesController < ApplicationController
   end
 
   def index
-    @warpable = Warpable.order("position")
+    @warpable = Warpable.order('position')
   end
 
   def sort
