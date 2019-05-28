@@ -101,7 +101,7 @@ class ImagesController < ApplicationController
 
   def sort
     params[:warpable].each_with_index do |id, index|
-      @warpable.where(id: id).update_all(position: index+1)
+      @warpable.where(id: id).update_all(position: index + 1)
     end
   end
 
