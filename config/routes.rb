@@ -130,7 +130,7 @@ Mapknitter::Application.routes.draw do
 
   resources :images do
     collection do
-      put :sort
+      post :sort
     end
   end
 

@@ -130,6 +130,7 @@ ActiveRecord::Schema.define(:version => 20150715162314) do
     t.string   "thumbnail"
     t.integer  "image_file_size"
     t.integer  "width"
+    t.integer  "position"
     t.integer  "height"
     t.datetime "created_at"
     t.datetime "updated_at"

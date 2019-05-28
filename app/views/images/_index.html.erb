@@ -75,7 +75,7 @@
    update: function(e,ui){
       $.ajax({
         url: $(this).data("url"),
-        type: "PUT",
+        type: "POST",
         data: $(this).sortable('serialize'),
       })
     }
