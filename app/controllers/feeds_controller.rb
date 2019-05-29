@@ -7,6 +7,7 @@ class FeedsController < ApplicationController
                            conditions: { archived: false, password: '' },
                            joins: %i[user warpables],
                            group: 'maps.id')
+    @warpable = Warpable.sort_by('position')
     render layout: false, template: 'feeds/all'
     response.headers['Content-Type'] = 'application/xml; charset=utf-8'
   end
