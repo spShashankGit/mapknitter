@@ -29,6 +29,7 @@ class ImagesController < ApplicationController
     map = Map.find(params[:map_id])
     @warpable.history = ''
     @warpable.map_id = map.id
+    @warpable.position = 1
     map.updated_at = Time.now
     map.save
     respond_to do |format|
@@ -102,7 +103,6 @@ class ImagesController < ApplicationController
     params[:warpable].each_with_index do |id, index|
       Warpable.where(id: id).update_all(position: index + 1)
     end
-    @warpable = Warpable.order('position')
     respond_to do |format|
       format.json { head :no_content }
     end
