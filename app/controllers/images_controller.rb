@@ -103,9 +103,6 @@ class ImagesController < ApplicationController
     params[:warpable].each_with_index do |id, index|
       Warpable.where(id: id).update_all(position: index + 1)
     end
-    respond_to do |format|
-      format.json { head :no_content }
-    end
   end
 
   def destroy
