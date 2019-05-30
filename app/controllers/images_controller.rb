@@ -103,6 +103,7 @@ class ImagesController < ApplicationController
     params[:warpable].each_with_index do |id, index|
       Warpable.where(id: id).update_all(position: index + 1)
     end
+    @warpable = Warpable.joins(:maps).group('warpables.position').order('position')
   end
 
   def destroy
