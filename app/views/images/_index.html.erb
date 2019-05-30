@@ -4,7 +4,8 @@
   <%end%>
 <table class="warpables-all table table-striped">
   <tbody data-url = "<%= sort_images_path %>">
-    <% @map.warpables.each do |warpable| %>
+    <% ary = @map.warpables.sort { |a, b| a.position <=> b.position } %>
+    <% ary.each do |warpable| %>
       <tr id="warpable-<%= warpable.id %>">
         <td class="warpable">
           <%= image_tag warpable.image.url(:thumb), 

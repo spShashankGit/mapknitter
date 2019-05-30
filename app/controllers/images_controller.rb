@@ -98,20 +98,14 @@ class ImagesController < ApplicationController
     render text: 'success'
   end
 
-  # def index
-    
-  # end
-
   def sort
-      params[:warpable].each_with_index do |id, index|
-      puts "#{index}"
+    params[:warpable].each_with_index do |id, index|
       Warpable.where(id: id).update_all(position: index + 1)
     end
-    @warpable = Warpable.order('position')    
+    @warpable = Warpable.order('position')
     respond_to do |format|
       format.json { head :no_content }
-      format.js   { render :layout => false }
-   end
+    end
   end
 
   def destroy
