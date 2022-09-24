@@ -1,4 +1,4 @@
-# Fake maps
+# Fake users
 USERS = []
 
 # basic account
@@ -17,7 +17,7 @@ USERS.push(u_admin)
   USERS.push(user)
 end
 
-p 'Now faking Maps....'
+# Now faking Maps....
 maps = []
 30.times do
   map = Map.new(
@@ -33,23 +33,18 @@ maps = []
   map.save
   maps. << map
 end
-p 'Done faking maps...'
-
 
 # Fake maps images
-p 'Adding Warbaples to maps'
-
 maps.each do |map|
   image = map.warpables.new
-  image.id  = Faker::Number.unique.between(10, 100)
+  image.id  = Faker::Number.unique.between(from: 10, to: 100)
   image.history =  Faker::Lorem.word
   image.image_file_name =  'demo.png'
   image.width = 500
-  image.nodes = '1,3,4,5'
   system("mkdir -p public/system/images/#{image.id}/original")
   system("cp test/fixtures/demo.png public/system/images/#{image.id}/original/demo.png")
   image.image_content_type = 'image/png'
   image.save
 end
-p  'Done adding images to maps'
+
 

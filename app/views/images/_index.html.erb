@@ -1,29 +1,72 @@
-<h4>Images</h4>
+<div>
+<h4 class="sidebar-heading">Images</h4>
+<div class="grid-list">
+  <button class="list-view" onClick="list()"><i class="fa fa-bars"></i></button>
+  <button class="grid-view" onClick="grid()"><i class="fa fa-th"></i></button>
+</div>
+<div class="image-order">
+  <p style="display: inline;">Sort by: </p>
+  <div class="sort-label">
+    <p class="sort-by-text">Recent</p>
+    <i class="fa fa-angle-down" onClick="$('.image-order-content').toggle()" style="cursor: pointer; padding-left: 5px;"></i>
+  </div>
+  <div class="image-order-content">
+    <a class="name" href="?sort=name">Name</a>
+    <a class="size" href="?sort=size">Size</a>
+    <a class="recent" href="?sort=recent">Recent</a>
+  </div>
+</div>
+</div>
+
 <% if @map.warpables.empty? %>
   <p id="no-images">No images uploaded. </p>
-  <%end%>
+<% end %>
 <table class="warpables-all table table-striped">
   <tbody>
-    <% @map.warpables.each do |warpable| %>
+    <% sort_param = params[:sort] %>
+    <% if sort_param == 'name' %>
+      <% ary = @map.warpables.sort { |a, b| a.image_file_name <=> b.image_file_name } %>
+      <script>
+        $(".name").css("color","#5cb85c");
+        $(".sort-by-text").text("Name");
+      </script>
+    <% elsif sort_param == 'size' %>
+      <% ary = @map.warpables.sort { |a, b| a.image_file_size <=> b.image_file_size } %>
+      <script>
+        $(".size").css("color","#5cb85c");
+        $(".sort-by-text").text("Size");
+      </script>
+    <% else %>
+      <% ary = @map.warpables.sort { |a, b| b.created_at <=> a.created_at } %>
+      <script>
+        $(".recent").css("color","#5cb85c");
+        $(".sort-by-text").text("Recent");
+      </script>
+    <% end %>
+    <% ary.each do |warpable| %>
+
       <tr id="warpable-<%= warpable.id %>">
         <td class="warpable">
+          <div>
           <%= image_tag warpable.image.url(:thumb), 
               :'data-warpable-id' => warpable.id,
               :'data-map-id' => @map.id,
               :'id' => "warpable-img-#{warpable.id}"
           %>
+          </div>
         </td>
+
         <td class="col-middle">
           <%= link_to(warpable.image_file_name, warpable.image.url) %>
           <p><%= number_to_human_size warpable.image_file_size %></p>
           <p>
             <% unless warpable.placed? %>
-              <a onClick="window.mapKnitter.addImage('<%= warpable.image.url(:medium) %>',<%= warpable.id %>);$('#warpable-<%= warpable.id %> a').hide()" class="btn btn-sm btn-outline-secondary add-image-<%= warpable.id %>">Place</a>
+              <a onClick="window.mapknitter.addImage('<%= warpable.image.url(:medium) %>',<%= warpable.id %>);$('#warpable-<%= warpable.id %> a').hide()" class="btn btn-sm btn-outline-secondary add-image-<%= warpable.id %>">Place</a>
               <a class="btn btn-sm btn-outline-secondary add-image-gps-<%= warpable.id %>" style="display:none;">Place w/ GPS</a>
               <!-- <a href="">Re-place</a>  -->
               <script>
                 jQuery(document).ready(function($) {
-                  window.mapKnitter.geocodeImageFromId('#warpable-img-<%= warpable.id %>',<%= warpable.id %>,'<%= warpable.image.url(:medium) %>');
+                  window.mapknitter.geocodeImageFromId('#warpable-img-<%= warpable.id %>',<%= warpable.id %>,'<%= warpable.image.url(:medium) %>');
                 })
               </script>
             <% end %>
@@ -31,34 +74,37 @@
         </td>
         <td>
           <% if logged_in? && current_user.can_delete?(warpable) %>
-            <%= link_to "<i class='fa fa-remove'></i>".html_safe, [@map, warpable],
-                :method => "delete",
-                :confirm => "Are you sure? This cannot be undone.",
-                :class => "btn btn-sm btn-danger",
-                :title => "Delete",
-                :rel=> "tooltip" %>
+            <%= link_to "<i class='fas fa-times'></i>".html_safe, [@map, warpable],
+                method: "delete",
+                class: "btn btn-sm btn-danger",
+                title: "Delete",
+                rel: "tooltip",
+                data: { confirm: "Are you sure? This cannot be undone." }
+            %>
           <% end %>
           <% if warpable.placed? %>
-            <a rel="tooltip" id="locate-warpable-<%= warpable.id %>" title="Pan to this image" class="btn btn-sm btn-success"><i class='fa fa-crosshairs'></i></a>
-            <a rel="tooltip" title="Download full resolution distorted image (please allow popups)" class="btn btn-sm btn-outline-secondary img-download img-download-<%= warpable.id %>" data-image="/images/fetch/?url=<%= warpable.image.url(:original) %>"><i class="fa fa-download"></i></a>
+            <a id="locate-warpable-<%= warpable.id %>" title="Pan to this image" class="btn btn-sm btn-success"><i class='fa fa-crosshairs'></i></a>
+            <a title="Download full resolution distorted image (please allow popups)" class="btn btn-sm btn-outline-secondary img-download img-download-<%= warpable.id %>" data-image="/images/fetch/?url=<%= warpable.image.url(:original) %>"><i class="fa fa-download"></i></a>
+            <a title="History of the image" class = "btn btn-sm btn-warning" onClick="$('#image-vesrions-<%= warpable.id %>').toggle()" style="cursor: pointer;">
+            <i class='fas fa-clock'></i>
+            </a>
             <div class="full-image-container-<%= warpable.id %>" style="overflow:hidden;width:0;height:0;"><img id="full-img-<%= warpable.id %>" /></div>
             <script>
               $('#warpable-<%= warpable.id %> [rel=tooltip]').tooltip();
               $('#locate-warpable-<%= warpable.id %>').click(function(){
                 var center_and_bring_to_front = function() {
-                  window.mapKnitter._map.fitBounds([new L.LatLng(<%= warpable.nodes_array.first.lat %>,<%= warpable.nodes_array.first.lon %>),
+                  window.mapknitter._map.fitBounds([new L.LatLng(<%= warpable.nodes_array.first.lat %>,<%= warpable.nodes_array.first.lon %>),
                                                       new L.LatLng(<%= warpable.nodes_array[2].lat %>,<%= warpable.nodes_array[2].lon %>)]);
                   $.each(images,function(i,img) {
                     if (img.warpable_id == <%= warpable.id %>) {
-                      window.mapKnitter.selectImage.bind(img)()
+                      window.mapknitter.selectImage.bind(img)()
                     }
                   })
                 }
-
                 /* wait for map to load if we're on a small screen and it's been hidden */
                 if ($('body').width() < 400) {
                   window.toggle_sidebar();
-                  window.mapKnitter._map.once('resize', center_and_bring_to_front)
+                  window.mapknitter._map.once('resize', center_and_bring_to_front)
                 } else {
                   center_and_bring_to_front();
                 }
@@ -67,6 +113,41 @@
           <% end %>
         </td>
       </tr>
+      <td colspan="3" style="padding: 0px; padding-top: 10px;">
+        <div class="dropdown" style="margin-top: -20px;">
+          <div class="dropdown-menu image-version" aria-labelledby="dropdownMenuButton" id="image-vesrions-<%= warpable.id %>">
+            <ul >
+              <li><%= warpable.versions.length - 1 %> revisions. <a target="_blank" href="https://publiclab.org/mapknitter-version-tracking">Learn more</a>
+              </li>
+            <% warpable.versions.reverse.each do |version| %>
+              <li class="<%= warpable.id %>" id="<%= version.index + 1%>" onClick="getVersion(this)"><%= version.event.capitalize %>d by
+                <% if version.whodunnit && version.whodunnit != 'Anonymous' %>
+                  <% user = User.find_by_id(version.whodunnit) %>
+                  <% if user %>
+                    <a href="/profile/<%= user.login %>"><%= user.login %></a>
+                  <% end %>
+                <% else %>
+                  <u>an Anonymous user</u>
+                <% end %>
+                <%= time_ago_in_words(version.created_at) %> ago
+                <%= link_to '' ,images_revert_path(id: warpable.id, version:version), class: 'fa fa-undo btn btn-sm btn-primary', title: 'Revert to this version' %>
+              </li>
+            <% end %>
+          </ul>
+          </div>
+        </div>
+      </td>
     <% end %>
   </tbody>
 </table>
+<script>
+  function grid(){
+    $('td').hide();
+    $('.warpable').show();
+    $('tr').css('display','inline-block');
+    $('.warpable').css('padding','0.75rem 0.5rem')
+  }
+  function list(){
+    $('td').show()
+  }
+</script>

@@ -231,8 +231,8 @@ class Exporter
      my_warpable_coords = warpable.generate_perspectival_distort(scale,slug)
      puts '- '+my_warpable_coords.to_s
      warpable_coords << my_warpable_coords
-     lowest_x = my_warpable_coords.first if (my_warpable_coords.first < lowest_x || lowest_x == 0)
-     lowest_y = my_warpable_coords.last if (my_warpable_coords.last < lowest_y || lowest_y == 0)
+     lowest_x = my_warpable_coords.first if (my_warpable_coords.first < lowest_x || lowest_x.zero? )
+     lowest_y = my_warpable_coords.last if (my_warpable_coords.last < lowest_y || lowest_y.zero? )
     end
     [lowest_x,lowest_y,warpable_coords]
   end
@@ -254,31 +254,24 @@ class Exporter
         maxlon = n.lon if maxlon == nil || n.lon > maxlon
       end
     end
-    first = true
     if ordered != true
       # sort by area; this would be overridden by a provided order
       warpables = placed_warpables.sort{|a,b|b.poly_area <=> a.poly_area}
     end
     warpables.each do |warpable|
       geotiffs += ' '+directory+warpable.id.to_s+'-geo.tif'
-      if first
-        gdalwarp = "gdalwarp -s_srs EPSG:3857 -te "+minlon.to_s+" "+minlat.to_s+" "+maxlon.to_s+" "+maxlat.to_s+" "+directory+warpable.id.to_s+'-geo.tif '+directory+slug+'-geo.tif'
-        first = false
-      else
-        gdalwarp = "gdalwarp "+directory+warpable.id.to_s+'-geo.tif '+directory+slug+'-geo.tif'
-      end
-      puts gdalwarp
-      system(self.ulimit+gdalwarp)
     end
+    gdalwarp = "gdalwarp -s_srs EPSG:3857 -te #{minlon} #{minlat} #{maxlon} #{maxlat} #{geotiffs} #{directory}#{slug}-geo.tif"
+    puts gdalwarp
+    system(self.ulimit+gdalwarp)
     composite_location
   end
 
   # generates a tileset at root/public/tms/<slug>/
   # root is something like https://mapknitter.org
   def self.generate_tiles(key, slug, root)
-    key = "AIzaSyAOLUQngEmJv0_zcG1xkGq-CXIPpLQY8iQ" if key == "" # ugh, let's clean this up!
-    key = key || "AIzaSyAOLUQngEmJv0_zcG1xkGq-CXIPpLQY8iQ"
-    gdal2tiles = 'gdal2tiles.py -k --s_srs EPSG:3857 -t "'+slug+'" -g "'+key+'" '+root+'/public/warps/'+slug+'/'+slug+'-geo.tif '+root+'/public/tms/'+slug+"/"
+    key = "AIzaSyAOLUQngEmJv0_zcG1xkGq-CXIPpLQY8iQ" if key.blank?
+    gdal2tiles = 'gdal2tiles.py -k --s_srs EPSG:4326 -t "'+slug+'" -g "'+key+'" '+root+'/public/warps/'+slug+'/'+slug+'-geo.tif '+root+'/public/tms/'+slug+"/"
     puts gdal2tiles
     system(self.ulimit+gdal2tiles)
   end
@@ -307,6 +300,7 @@ class Exporter
       export.geotiff = false
       export.zip = false
       export.jpg = false
+      export.bands_string = 'default bands_string'
       export.save
 
       directory = "#{root}/public/warps/"+slug+"/"

@@ -1,21 +1,71 @@
-sudo: required
+language: ruby
+
+rvm:
+  - 2.4.6
+
+node_js:
+  - "12.6.0"
+
 services:
+  - mysql
   - docker
+
+cache:
+  directories:
+   - $PWD/node_modules/
+   - $PWD/vendor/.bundle/
+
+before_install:
+  - npm i -g npm@6.9.0
+  - curl -o- -L https://yarnpkg.com/install.sh | bash -s -- --version 1.17.3
+  - export PATH="$HOME/.yarn/bin:$PATH"
 
 install:
   - cp config/database.yml.example config/database.yml
   - cp config/config.yml.example config/config.yml
   - cp db/schema.rb.example db/schema.rb
-  - docker-compose up -d --build
-  - docker-compose exec web bash -l -c "sleep 10"
-  - docker-compose exec web bash -l -c "bundle install"
-  - docker-compose exec web bash -l -c "rake db:setup || rake db:migrate"
+  - ./lib/exporter-deps.sh > /dev/null 2>&1
+  - bundle check --path vendor/.bundle/ || bundle install --path vendor/.bundle/
+  - if [ $RAILS_ENV != 'production' ]; then
+      yarn check || yarn install;
+    fi
+  - if [ $RAILS_ENV == 'production' ]; then
+      mysql -e "CREATE DATABASE mapknitter;";
+      mysql -e "CREATE USER 'mapknitter'@'%' IDENTIFIED BY 'mapknitter';";
+      mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'mapknitter'@'%';";
+      bundle exec rails db:schema:load;
+    else
+      bundle exec rails db:setup || bundle exec rails db:migrate;
+    fi
 
-script:
-  - docker-compose exec web bash -l -c "CI=true TRAVIS=true rake test:all"
-  - bash <(curl -s https://codecov.io/bash)
+env:
+  global:
+    - RAILS_ENV=test
+    - CI=true
+    - TRAVIS=true
+
+jobs:
+  include:
+    - name: "Models Tests"
+      script: bundle exec rails test:models
+    - name: "Integration Tests"
+      script: bundle exec rails test:integration
+    - name: "Controllers Tests"
+      script: bundle exec rails test:controllers
+    - name: "System Tests"
+      script: bundle exec rails test:system
+    - name: "Rubocop Linter"
+      script: bundle exec rubocop
+    - name: "Docker Builds"
+      script: docker build -t mapknitter .
+    - name: "Asset Precompilation"
+      env:
+        - RAILS_ENV=production
+      script:
+        - bundle exec rails assets:precompile
 
 branches:
   only:
     - main
     - unstable
+    - development

@@ -6,15 +6,22 @@ class ApplicationController < ActionController::Base
 
   helper :all # include all helpers, all the time
 
-  before_filter :current_user
+  before_action :current_user
   helper_method :logged_in?, :current_location
+
+  before_action :set_paper_trail_whodunnit
+
+  def user_for_paper_trail
+    # Save the user responsible for the action
+    logged_in? ? current_user.id : 'Anonymous'
+  end
 
   def current_user
     user_id = session[:user_id]
     if user_id
       begin
         @user = User.find(user_id)
-      rescue
+      rescue StandardError
         @user = nil
       end
     else
@@ -41,13 +48,14 @@ class ApplicationController < ActionController::Base
 
     begin
       user_id && User.find(user_id) ? true : false
-    rescue
+    rescue StandardError
       return false
     end
   end
 
   def save_tags(map)
     return unless params[:tags].present?
+
     params[:tags].tr(' ', ',').split(',').each do |tagname|
       map.add_tag(tagname.strip, current_user)
     end

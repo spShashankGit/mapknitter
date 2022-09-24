@@ -1,10 +1,10 @@
-# rubocop:disable LineLength
 require 'open3'
 
 class MapsController < ApplicationController
   protect_from_forgery except: :export
-  before_filter :require_login, only: %i[edit update destroy]
-  before_filter :find_map, only: %i[show annotate embed edit update images export exports destroy]
+
+  before_action :require_login, only: %i(edit update destroy)
+  before_action :find_map, only: %i(show annotate embed edit update images destroy archive)
 
   layout 'knitter2'
 
@@ -33,18 +33,18 @@ class MapsController < ApplicationController
 
   def create
     if logged_in?
-      @map = current_user.maps.new(params[:map])
+      @map = current_user.maps.new(map_params)
       @map.author = current_user.login # eventually deprecate
       if @map.save
-        redirect_to "/maps/#{@map.slug}"
+        redirect_to @map
       else
         render 'new'
       end
     else
-      @map = Map.new(params[:map])
+      @map = Map.new(map_params)
       if Rails.env != 'production' || verify_recaptcha(model: @map, message: "ReCAPTCHA thinks you're not human! Try again!")
         if @map.save
-          redirect_to "/maps/#{@map.slug}"
+          redirect_to @map
         else
           render 'new'
         end
@@ -61,13 +61,9 @@ class MapsController < ApplicationController
     # this is used for the resolution slider
     @resolution = @map.average_cm_per_pixel.round(4)
     @resolution = 5 if @resolution < 5 # soft-set min res
-
-    # remove following lines once legacy interface is deprecated
-    render template: 'map/show', layout: 'knitter' if params[:legacy]
   end
 
   def archive
-    @map = Map.find_by_slug(params[:id])
     if logged_in? && current_user.can_delete?(@map)
       @map.archived = true
       if @map.save
@@ -78,12 +74,13 @@ class MapsController < ApplicationController
     else
       flash[:error] = 'Only admins may archive maps.'
     end
-    redirect_to '/?_=' + Time.now.to_i.to_s
+    redirect_to "/?_=#{Time.now.to_i}"
   end
 
   def embed
     @map.zoom ||= 12
     @embed = true
+    response.headers.except! 'X-Frame-Options' # allow use of embed in iframes
     render template: 'maps/show'
   end
 
@@ -95,12 +92,7 @@ class MapsController < ApplicationController
   def edit; end
 
   def update
-    @map.name =        params[:map][:name]
-    @map.location =    params[:map][:location]
-    @map.lat =         params[:map][:lat]
-    @map.lon =         params[:map][:lon]
-    @map.description = params[:map][:description]
-    @map.license =     params[:map][:license] if @map.user_id == current_user.id
+    @map.update_attributes(map_params)
 
     save_tags(@map)
     @map.save
@@ -114,33 +106,28 @@ class MapsController < ApplicationController
       redirect_to '/'
     else
       flash[:error] = 'Only admins or map owners may delete maps.'
-      redirect_to "/maps/#{@map.slug}"
+      redirect_to @map
     end
   end
 
   # used by leaflet to fetch corner coords of each warpable
   def images
-    warpables = []
-    @map.warpables.each do |warpable|
-      warpables << warpable
-      warpables.last[:nodes] = warpable.nodes_array
-      warpables.last.src = warpable.image.url
-      warpables.last.srcmedium = warpable.image.url(:medium)
-    end
-    render json: warpables
+    render json: @map.warpables
   end
 
   # run the export
   def export
+    @map = Map.find_by(id: params[:id])
     if logged_in? || Rails.env.development? || verify_recaptcha(model: @map, message: "ReCAPTCHA thinks you're not a human!")
-      render text: @map.run_export(current_user, params[:resolution].to_f)
+      render plain: @map.run_export(current_user, params[:resolution].to_f)
     else
-      render text: 'You must be logged in to export, unless the map is anonymous.'
+      render plain: 'You must be logged in to export, unless the map is anonymous.'
     end
   end
 
   # render list of exports
   def exports
+    @map = Map.find_by(id: params[:id])
     render partial: 'maps/exports', layout: false
   end
 
@@ -148,11 +135,16 @@ class MapsController < ApplicationController
   def region
     area = params[:id] || 'this area'
     @title = "Maps in #{area}"
-    ids = Map.bbox(params[:minlat], params[:minlon], params[:maxlat], params[:maxlon]).collect(&:id)
-    @maps = Map.where(password: '')
-               .where('id IN (?)', ids)
-               .paginate(page: params[:page], per_page: 24)
-               .except(:styles)
+    ids = Map.bbox(params[:minlat], params[:minlon], params[:maxlat], params[:maxlon], params[:tag])
+             .collect(&:id)
+    cache_key = "#{params[:minlat]}-#{params[:maxlat]}-#{params[:minlon]}-#{params[:maxlon]}-#{params[:tag]}"
+    @maps =
+      Rails.cache.fetch(cache_key, expires_in: 1.day) do
+        Map.where(password: '')
+          .where('id IN (?)', ids)
+          .paginate(page: params[:page], per_page: 50)
+          .except(:styles, :email)
+      end
     @maps.each do |map|
       map.image_urls = map.warpables.map { |warpable| warpable.image.url }
     end
@@ -173,32 +165,40 @@ class MapsController < ApplicationController
 
   def featured
     @title = 'Featured maps'
-    @maps = Map.joins(:warpables)
-               .select('maps.*, count(maps.id) as image_count')
-               .group('warpables.map_id')
-               .order('image_count DESC')
-               .paginate(page: params[:page], per_page: 24)
+    @maps = Map.featured.paginate(page: params[:page], per_page: 24)
     render 'maps/index', layout: 'application'
   end
 
   def search
-    params[:id] ||= params[:q]
-    @maps = Map.select('archived, author, created_at, description, id, lat, license, location, name, slug,
-                        tile_layer, tile_url, tiles, updated_at, user_id, version, zoom')
-               .where('archived = ? AND (author LIKE ? OR name LIKE ? OR location LIKE ? OR description LIKE ?)',
-                      false, '%' + params[:id] + '%', '%' + params[:id] + '%', '%' + params[:id] + '%', '%' + params[:id] + '%')
-               .paginate(page: params[:page], per_page: 24)
-    @title = "Search results for '#{params[:id]}'"
+    data = params[:q]
+    query = params[:q].gsub(/\s+/, '')
+
     respond_to do |format|
-      format.html { render 'maps/index', layout: 'application' }
-      format.json { render json: @maps }
+      if query.length < 3
+        flash.now[:info] = 'Invalid Query: non white-space character count is less than 3'
+        @title = 'Featured maps'
+        @maps = Map.featured
+                   .paginate(page: params[:page], per_page: 24)
+                   .except(:styles, :email)
+        @authors = User.where(login: Map.featured.collect(&:author))
+                                     .paginate(page: params[:mappers], per_page: 20)
+        format.html { render 'front_ui/gallery', layout: 'application' }
+      else
+        @title = "Search results for '#{data}'"
+        @maps = Map.search(data).paginate(page: params[:page], per_page: 24)
+        format.html { render 'front_ui/gallery', layout: 'application' }
+        format.json { render json: @maps }
+      end
     end
   end
-  
+
   private
 
   def find_map
-    @map = Map.find(params[:id])
+    @map = Map.find_by(slug: params[:id])
+  end
+
+  def map_params
+    params.require(:map).permit(:author, :name, :slug, :lat, :lon, :location, :description, :zoom, :license)
   end
 end
-# rubocop:enable LineLength
